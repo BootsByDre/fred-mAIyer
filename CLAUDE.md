@@ -20,12 +20,14 @@ A CLI-driven grocery cart automation tool for Fred Meyer (Kroger). Instead of bu
 
 ### Tech Stack
 
-- **Language:** TypeScript (Node.js)
+- **Language:** Python 3.11+
 - **API:** Kroger Public API (https://developer.kroger.com)
 - **Auth:** OAuth2 (Authorization Code Grant for user cart access)
-- **Package manager:** npm
-- **Testing:** Vitest
-- **Linting:** ESLint + Prettier
+- **HTTP client:** `httpx` (async support built in)
+- **Data models:** Pydantic for typed API response/request models
+- **Package manager:** `uv`
+- **Testing:** `pytest` + `respx` (mocked async HTTP)
+- **Linting:** `ruff` (replaces flake8, isort, and black in one tool)
 
 ### Project Structure (planned)
 
@@ -33,21 +35,24 @@ A CLI-driven grocery cart automation tool for Fred Meyer (Kroger). Instead of bu
 fred-mAIyer/
 ├── CLAUDE.md              # This file — project guide for AI assistants
 ├── README.md              # Public-facing project description
-├── package.json
-├── tsconfig.json
+├── pyproject.toml         # Project metadata, dependencies, tool config
+├── uv.lock                # Lockfile (committed)
+├── .python-version        # Pinned Python version for uv
 ├── .env.example           # Template for required env vars (never commit .env)
 ├── src/
-│   ├── index.ts           # Main entrypoint / CLI orchestration
-│   ├── auth.ts            # Kroger OAuth2 authentication
-│   ├── products.ts        # Product search and selection
-│   ├── cart.ts            # Cart operations (add/remove/update/list)
-│   ├── store.ts           # Store location resolution
-│   └── types.ts           # Shared TypeScript types and interfaces
+│   └── fred_maiyer/
+│       ├── __init__.py
+│       ├── auth.py        # Kroger OAuth2 authentication
+│       ├── products.py    # Product search and selection
+│       ├── cart.py         # Cart operations (add/remove/update/list)
+│       ├── store.py        # Store location resolution
+│       └── models.py       # Pydantic models for API responses/requests
 ├── tests/
-│   ├── auth.test.ts
-│   ├── products.test.ts
-│   ├── cart.test.ts
-│   └── store.test.ts
+│   ├── conftest.py        # Shared fixtures
+│   ├── test_auth.py
+│   ├── test_products.py
+│   ├── test_cart.py
+│   └── test_store.py
 └── .github/
     └── workflows/
         └── ci.yml         # CI pipeline
@@ -87,20 +92,21 @@ KROGER_STORE_ID=        # Preferred Fred Meyer store ID (use store locator to fi
 ## Development Conventions
 
 ### Code Style
-- TypeScript strict mode enabled
-- Use `async/await` over raw Promises
-- Prefer named exports
+- Use `async/await` with `httpx.AsyncClient` for all HTTP calls
+- Prefer plain functions over classes unless truly necessary
 - Keep modules focused — one concern per file
-- No classes unless truly necessary; prefer plain functions + types
+- Use Pydantic models for all API request/response shapes
+- Type hints on all function signatures
 
 ### Error Handling
 - Wrap all API calls with clear error messages that include the HTTP status and endpoint
 - Never swallow errors silently
-- Throw typed errors where possible so callers can handle specific failure modes
+- Raise specific exception subclasses so callers can handle distinct failure modes
 
 ### Testing
-- Run tests: `npm test`
+- Run tests: `uv run pytest`
 - Write tests for all API-facing modules using mocked HTTP responses (do not call the real API in tests)
+- Use `respx` to mock `httpx` calls in tests
 - Test files live in `tests/` and mirror the `src/` structure
 
 ### Git
@@ -109,18 +115,19 @@ KROGER_STORE_ID=        # Preferred Fred Meyer store ID (use store locator to fi
 - Never commit `.env`, tokens, or secrets
 
 ### Commands
-- `npm install` — Install dependencies
-- `npm run build` — Compile TypeScript
-- `npm test` — Run test suite
-- `npm run lint` — Run ESLint + Prettier checks
-- `npm run lint:fix` — Auto-fix lint issues
+- `uv sync` — Install/sync dependencies
+- `uv run pytest` — Run test suite
+- `uv run ruff check .` — Lint
+- `uv run ruff format .` — Format code
+- `uv run ruff check --fix .` — Auto-fix lint issues
 
 ## Design Decisions
 
 1. **No custom UI** — Claude Code *is* the interface. The user talks to Claude, Claude uses this tool. No web app, no TUI needed.
 2. **Kroger API over browser automation** — Using the official API is more reliable, faster, and doesn't break on UI changes. Avoids Selenium/Playwright fragility.
-3. **TypeScript** — Type safety for API response shapes, good ecosystem, fast iteration.
-4. **Minimal dependencies** — Use `fetch` (built into Node 18+) for HTTP. Avoid heavy frameworks.
+3. **Python + Pydantic** — Type safety for API response shapes via Pydantic models, great ecosystem, fast iteration, no compile step.
+4. **Minimal dependencies** — `httpx` for HTTP, `pydantic` for models, `python-dotenv` for config. Avoid heavy frameworks.
+5. **uv for package management** — Fast, modern Python package manager with lockfile support and built-in virtual environment handling.
 
 ## Usage with Claude Code (MCP Tool Pattern)
 
