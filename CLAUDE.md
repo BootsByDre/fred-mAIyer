@@ -17,6 +17,7 @@ A CLI-driven grocery cart automation tool for Fred Meyer (Kroger). Instead of bu
 - **Product search** — Searches the Kroger product catalog by keyword, filters by location/store, and ranks results by relevance.
 - **Cart manager** — Adds, removes, and updates items in the user's Kroger cart via API.
 - **Store locator** — Resolves the user's preferred Fred Meyer store (by ZIP or store ID) so search results reflect local inventory and pricing.
+- **Google Tasks integration** (optional) — Pulls shopping list items from a Google Tasks list and checks them off after they're added to the cart.
 
 ### Tech Stack
 
@@ -46,13 +47,15 @@ fred-mAIyer/
 │       ├── products.py    # Product search and selection
 │       ├── cart.py         # Cart operations (add/remove/update/list)
 │       ├── store.py        # Store location resolution
+│       ├── google_tasks.py # Google Tasks shopping list integration (optional)
 │       └── models.py       # Pydantic models for API responses/requests
 ├── tests/
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_auth.py
 │   ├── test_products.py
 │   ├── test_cart.py
-│   └── test_store.py
+│   ├── test_store.py
+│   └── test_google_tasks.py
 └── .github/
     └── workflows/
         └── ci.yml         # CI pipeline
@@ -77,6 +80,27 @@ Fred Meyer is owned by Kroger. All automation goes through the **Kroger Public A
 2. User completes an OAuth2 Authorization Code flow in their browser to grant cart write access
 3. The tool stores and refreshes tokens locally (never committed to git)
 
+## Google Tasks API Overview (Optional)
+
+If the user opts in during `init`, a Google Tasks list serves as their shopping list. The integration uses the Google Tasks REST API directly via `httpx` (no `google-api-python-client` dependency).
+
+- **Base URL:** `https://tasks.googleapis.com/tasks/v1`
+- **Auth:** Google OAuth2 — requires credentials from https://console.cloud.google.com/apis/credentials
+- **Key endpoints:**
+  - `GET /users/@me/lists` — List all task lists
+  - `GET /lists/{tasklist}/tasks` — Get tasks from a list
+  - `PATCH /lists/{tasklist}/tasks/{task}` — Update a task (e.g., mark as completed)
+- **Scope needed:** `https://www.googleapis.com/auth/tasks`
+- **OAuth2 redirect port:** `8889` (separate from Kroger's `8888`)
+
+### Google Tasks Workflow
+
+1. During `init`, user opts to connect Google Tasks and completes OAuth2
+2. User selects which task list to use as their shopping list
+3. When starting a new order, Claude Code calls `get_incomplete_tasks()` to pull items
+4. Each task title is used as a search term for Kroger product search
+5. After items are added to the cart, Claude Code calls `complete_tasks()` to check them off
+
 ## Environment Variables
 
 Required in `.env` (see `.env.example`):
@@ -87,6 +111,16 @@ KROGER_CLIENT_SECRET=   # From developer.kroger.com
 KROGER_ACCESS_TOKEN=    # Obtained after OAuth2 flow
 KROGER_REFRESH_TOKEN=   # For automatic token refresh
 KROGER_STORE_ID=        # Preferred Fred Meyer store ID (use store locator to find)
+```
+
+Optional (set during `init` if Google Tasks is enabled):
+
+```
+GOOGLE_CLIENT_ID=       # From Google Cloud Console
+GOOGLE_CLIENT_SECRET=   # From Google Cloud Console
+GOOGLE_ACCESS_TOKEN=    # Obtained after Google OAuth2 flow
+GOOGLE_REFRESH_TOKEN=   # For automatic token refresh
+GOOGLE_TASKS_LIST_ID=   # ID of the Google Tasks list to use as shopping list
 ```
 
 ## Development Conventions
@@ -151,6 +185,18 @@ User: "What's in my cart right now?"
 Claude Code:
   1. Fetches current cart contents
   2. Displays item names, quantities, and prices
+```
+
+```
+User: "Add everything from my shopping list" (Google Tasks enabled)
+
+Claude Code:
+  1. Calls get_incomplete_tasks() to fetch items from the user's Google Tasks list
+  2. For each task (e.g., "Milk", "Eggs", "Bread"), searches Kroger product catalog
+  3. Selects the best match for each item
+  4. Adds all items to cart via the cart API
+  5. Calls complete_tasks() to check off the items in Google Tasks
+  6. Reports back: "Added 3 items from your shopping list to your Fred Meyer cart"
 ```
 
 ## What's Not In Scope (for now)

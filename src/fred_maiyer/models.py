@@ -38,3 +38,19 @@ class TokenResponse(BaseModel):
     refresh_token: str = ""
     token_type: str = "Bearer"
     expires_in: int = 1800
+
+
+class GoogleTaskList(BaseModel):
+    """A task list from Google Tasks."""
+
+    id: str
+    title: str
+
+
+class GoogleTask(BaseModel):
+    """A task from a Google Tasks list."""
+
+    id: str
+    title: str
+    notes: str = ""
+    status: str = "needsAction"
